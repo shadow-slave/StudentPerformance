@@ -9,13 +9,20 @@ import requests
 from streamlit_lottie import st_lottie
 from datetime import datetime, date
 
+import base64
+@st.cache_data
+def get_base64_of_bin_file(bin_file):
+    with open(bin_file, 'rb') as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Uni. AI Portal", layout="wide", page_icon="🎓")
 
 # Configure Gemini API
 # IMPORTANT: Replace with your actual key or use st.secrets
 try:
-    genai.configure(api_key="key_goes_here") 
+    genai.configure(api_key="AIzaSyDfxPEiQZy_1Inqg5Bh_KNPdiLNXU4Ve7Y") 
 except Exception as e:
     st.error(f"API Configuration Error: {e}")
 
@@ -28,6 +35,7 @@ except:
     st.stop()
 
 # --- HELPER: LOAD LOTTIE ANIMATION ---
+@st.cache_data
 def load_lottieurl(url: str):
     r = requests.get(url)
     if r.status_code != 200: return None
@@ -73,7 +81,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- BACKEND FUNCTIONS ---
-
+@st.cache_data
 def get_all_students():
     conn = sqlite3.connect('college_data.db')
     df = pd.read_sql_query("SELECT s.*, p.* FROM students s JOIN proctorial p ON s.usn = p.usn", conn)
@@ -214,7 +222,7 @@ def generate_report(name, score, factors):
         return "AI Service Unavailable."
         
 def generate_timetable(student_data):
-    prompt = f"Create a detailed 3-day study table (Markdown) for Internal 1 ({student_data['internal1']}), Internal 2 ({student_data['internal2']}). Study Level {student_data['study_time']}/4."
+    prompt = f"Create a detailed 3-day study table (Markdown) for Internal 1 ({student_data['internal1']*5:.0f}), Internal 2 ({student_data['internal2']*5:.0f}). Study Level {student_data['study_time']}/4."
     try: return genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt).text
     except: return "AI Service Unavailable."
 
@@ -224,46 +232,70 @@ if 'pred_result' not in st.session_state: st.session_state['pred_result'] = None
 if 'study_plan' not in st.session_state: st.session_state['study_plan'] = None
 
 # ==========================================
-# 1. LOGIN SCREEN
+# 1. LOGIN SCREEN (Local Background Image)
 # ==========================================
 if st.session_state['user_role'] is None:
+    
+    # --- LOAD LOCAL BACKGROUND IMAGE ---
+    # Make sure 'background.jpg' is in the SAME folder as app.py
+    try:
+        img_file = "bg.jpg"  # <--- REPLACE WITH YOUR IMAGE NAME
+        bin_str = get_base64_of_bin_file(img_file)
+        
+        st.markdown(f"""
+        <style>
+        .stApp {{
+            background-image: linear-gradient(rgba(15, 23, 42, 0.85), rgba(15, 23, 42, 0.95)), url("data:image/jpg;base64,{bin_str}");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }}
+        </style>
+        """, unsafe_allow_html=True)
+    except FileNotFoundError:
+        st.error(f"⚠️ Error: Could not find image file '{img_file}'. Please check the name.")
+
+    # --- CENTERED LOGIN CARD ---
     col1, col2, col3 = st.columns([1, 1.2, 1])
+    
     with col2:
         st.markdown("<br><br><br>", unsafe_allow_html=True)
-        st.title("🎓 University Portal")
-        st.markdown("<p style='color:#94a3b8; margin-bottom: 20px;'>Secure Academic Management System</p>", unsafe_allow_html=True)
+        st.markdown('<div class="login-card">', unsafe_allow_html=True)
         
-        with st.container(border=True):
-            usn = st.text_input("Student ID (USN)", placeholder="1MS24MC001")
-            
-            # --- DATE PICKER UI (For Password) ---
-            dob_input = st.date_input("Date of Birth", min_value=date(1990, 1, 1), max_value=date.today())
-            # Convert date object back to string YYYY-MM-DD for checking
-            dob_str = dob_input.strftime('%Y-%m-%d')
-            
-            if st.button("Sign In", type="primary", use_container_width=True):
-                # Admin Bypass
-                if usn == "ADMIN" and dob_str == "2026-01-01": # Changed admin pass to a date for UI consistency
-                    st.session_state['user_role'] = "ADMIN"
+        c_logo, c_title = st.columns([1, 4])
+        with c_logo: st.image("https://cdn-icons-png.flaticon.com/512/3135/3135715.png", width=60)
+        with c_title: st.markdown("<h2 style='margin:0; padding-top:10px;'>Uni. AI Portal</h2>", unsafe_allow_html=True)
+        
+        st.markdown("<p style='color:#cbd5e1; margin-bottom: 20px;'>Student Performance Predictor</p>", unsafe_allow_html=True)
+        
+        usn = st.text_input("Student Identity (USN)", placeholder="e.g. 1MS24MC001")
+        dob_input = st.date_input("Security Key (DOB)", min_value=date(1990, 1, 1), max_value=date.today())
+        dob_str = dob_input.strftime('%Y-%m-%d')
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        if st.button("Login ➔", type="primary", use_container_width=True):
+            if usn == "ADMIN" and dob_str == "2026-01-01":
+                st.session_state['user_role'] = "ADMIN"
+                st.rerun()
+            elif usn == "ADMIN":
+                st.error("Admin Access: Use 2026-01-01")
+            else:
+                user = verify_student(usn, dob_str)
+                if user is not None:
+                    st.session_state['user_role'] = "STUDENT"
+                    st.session_state['user_data'] = user
                     st.rerun()
-                elif usn == "ADMIN": 
-                    st.error("For Admin: Use Date 2026-01-01") # Hint for you
                 else:
-                    user = verify_student(usn, dob_str)
-                    if user is not None:
-                        st.session_state['user_role'] = "STUDENT"
-                        st.session_state['user_data'] = user
-                        st.rerun()
-                    else:
-                        st.error("Invalid Credentials")
-
+                    st.error("⛔ Access Denied: Invalid Credentials")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
 # ==========================================
 # 2. ADMIN DASHBOARD
 # ==========================================
 elif st.session_state['user_role'] == "ADMIN":
     def logout():
         st.session_state.clear() # Wipes all data (Role, Student Data, Prediction, Study Plan)
-        st.rerun()
         
     with st.sidebar:
         st.markdown("### Admin Console")
@@ -429,7 +461,6 @@ elif st.session_state['user_role'] == "STUDENT":
         # LOGOUT WITH SESSION CLEAR (The Fix from before)
         def logout():
             st.session_state.clear()
-            st.rerun()
         st.button("Logout", on_click=logout, type="secondary")
 
     # --- TOP METRICS (Standard) ---
