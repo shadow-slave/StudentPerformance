@@ -65,3 +65,12 @@ The system is designed as a full-stack **University Management Portal** with Rol
 ├── requirements.txt       # List of dependencies
 └── README.md              # Documentation
 ```
+## 📸 Screenshots
+### Admin Dashboard
+![Admin Dsahboard](https://i.postimg.cc/NjwDY2Wq/admindashboard.png)
+### User Dashboard
+![User Dashboard](https://i.postimg.cc/2SFw58DC/userdashboard.png)
+### Login Page
+![Login](https://i.postimg.cc/MpbDGKSv/login.png)
+### Prediction Result
+![Prediction](https://i.postimg.cc/htbrGPBS/prediction.png)
